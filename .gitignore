@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+
+# Local dedupe / collection state (persisted in CI via actions/cache)
+.state/
+
+# Generated drafts for review (uploaded as workflow artifacts in CI)
+output/
+
+*.log
+.DS_Store

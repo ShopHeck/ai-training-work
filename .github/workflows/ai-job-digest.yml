@@ -1,0 +1,90 @@
+name: AI Job Digest
+
+# Daily digest Tue–Sun at 14:00 UTC, weekly roundup Mondays at 14:00 UTC.
+# Drafts are uploaded as a workflow artifact for review — nothing is posted.
+# To enable X posting from CI, set the X_* secrets and flip ENABLE_X_POSTING
+# to "true" in the job env, then pass --publish (see the commented step).
+
+on:
+  schedule:
+    - cron: "0 14 * * 0,2-6"   # daily digest (Sun + Tue–Sat; Monday is the weekly)
+    - cron: "0 14 * * 1"       # weekly roundup (Monday)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Digest mode"
+        required: true
+        default: "daily"
+        type: choice
+        options: ["daily", "weekly"]
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # .state/ (dedupe memory + item history) is carried between runs via the
+      # Actions cache. A cache miss just means the first run reports
+      # everything. Note: caches are branch-scoped — only runs on this branch
+      # or the default branch can feed restore-keys, and loaded state is
+      # re-validated (JSON shape + Zod per line) at read time.
+      - name: Restore dedupe state
+        uses: actions/cache@v4
+        with:
+          path: .state/
+          key: ai-digest-state-${{ github.run_id }}
+          restore-keys: ai-digest-state-
+
+      - name: Pick mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ inputs.mode }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 14 * * 1" ]; then
+            echo "mode=weekly" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=daily" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Collect + generate drafts
+        env:
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'anthropic' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+        run: npx tsx src/index.ts run --mode ${{ steps.mode.outputs.mode }}
+
+      - name: Upload drafts for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: drafts-${{ steps.mode.outputs.mode }}-${{ github.run_number }}
+          path: output/
+          retention-days: 30
+          if-no-files-found: warn
+
+      # Optional publishing — disabled by default. To turn on for X:
+      #   1. Add X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET secrets.
+      #   2. Uncomment this step.
+      # LinkedIn/Reddit stay manual — see README "Enabling publishing".
+      # - name: Publish approved drafts to X
+      #   if: vars.ENABLE_X_POSTING == 'true'
+      #   env:
+      #     ENABLE_X_POSTING: "true"
+      #     X_API_KEY: ${{ secrets.X_API_KEY }}
+      #     X_API_SECRET: ${{ secrets.X_API_SECRET }}
+      #     X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+      #     X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
+      #   run: npx tsx src/index.ts publish --platforms x --publish

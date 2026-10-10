@@ -1,0 +1,32 @@
+{
+  "name": "ai-training-work",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-training / data-annotation job digest and multi-platform content automation",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "collect": "tsx src/index.ts collect",
+    "generate": "tsx src/index.ts generate",
+    "publish": "tsx src/index.ts publish",
+    "run": "tsx src/index.ts run",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0",
+    "dotenv": "^17.2.0",
+    "openai": "^5.23.0",
+    "twitter-api-v2": "^1.24.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.4"
+  }
+}

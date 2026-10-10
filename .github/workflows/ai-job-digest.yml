@@ -35,7 +35,10 @@ jobs:
       - run: npm ci
 
       # .state/ (dedupe memory + item history) is carried between runs via the
-      # Actions cache. A cache miss just means the first run reports everything.
+      # Actions cache. A cache miss just means the first run reports
+      # everything. Note: caches are branch-scoped — only runs on this branch
+      # or the default branch can feed restore-keys, and loaded state is
+      # re-validated (JSON shape + Zod per line) at read time.
       - name: Restore dedupe state
         uses: actions/cache@v4
         with:

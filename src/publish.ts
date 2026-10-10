@@ -37,9 +37,17 @@ function xClient(): TwitterApi {
   });
 }
 
+const X_THREAD_MAX = 25; // X API thread cap
+
 async function publishX(thread: string[]): Promise<string> {
+  if (thread.length > X_THREAD_MAX) {
+    throw new Error(
+      `Thread has ${thread.length} posts, above the ${X_THREAD_MAX}-post X limit — ` +
+        `edit x-thread.json down to ${X_THREAD_MAX} posts rather than silently truncating.`,
+    );
+  }
   const client = xClient();
-  const posted = await client.v2.tweetThread(thread.slice(0, 25));
+  const posted = await client.v2.tweetThread(thread);
   const first = posted[0];
   return `posted ${posted.length} tweets (first id ${first?.data.id ?? "?"})`;
 }
@@ -98,12 +106,31 @@ function readOutput(dir: string, platform: Platform): string | string[] | null {
   const content = readFileSync(path, "utf8");
   if (platform === "x") {
     const thread = JSON.parse(content) as string[];
-    return thread.filter((t) => t.length <= X_LIMIT);
+    // Validate instead of silently dropping — a human-edited post over the
+    // limit must fail loudly, not vanish from the published thread.
+    if (!Array.isArray(thread) || thread.length === 0) {
+      throw new Error(`x-thread.json in ${dir} is empty or not an array`);
+    }
+    thread.forEach((t, i) => {
+      if (typeof t !== "string" || t.length === 0) {
+        throw new Error(`x-thread.json post ${i + 1} is empty`);
+      }
+      if (t.length > X_LIMIT) {
+        throw new Error(
+          `x-thread.json post ${i + 1} is ${t.length} chars (>${X_LIMIT}) — ` +
+            `edit it down before publishing`,
+        );
+      }
+    });
+    return thread;
   }
   return content;
 }
 
-/** Latest dated output dir, or an explicit path. */
+/**
+ * Latest run dir, or an explicit path. Runs are written to
+ * output/<YYYY-MM-DD>/<mode>-<HHMMSS>/ so nothing overwrites a reviewed draft.
+ */
 export function resolveOutputDir(base = "output", dir?: string): string {
   if (dir) return dir;
   if (!existsSync(base)) throw new Error(`No output dir at ${base} — run generate first.`);
@@ -113,7 +140,13 @@ export function resolveOutputDir(base = "output", dir?: string): string {
     .sort();
   const latest = dated[dated.length - 1];
   if (!latest) throw new Error(`No dated drafts found under ${base}/`);
-  return join(base, latest);
+  const dayDir = join(base, latest);
+  // New layout: per-run subdirs. Legacy layout: files directly in the date dir.
+  const runs = readdirSync(dayDir, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name)
+    .sort();
+  return runs.length > 0 ? join(dayDir, runs[runs.length - 1]!) : dayDir;
 }
 
 const TOGGLES: Record<Platform, string> = {
@@ -131,7 +164,17 @@ export async function publish(
   const outcomes: PublishOutcome[] = [];
 
   for (const platform of platforms) {
-    const content = readOutput(dir, platform);
+    let content: string | string[] | null;
+    try {
+      content = readOutput(dir, platform);
+    } catch (err) {
+      outcomes.push({
+        platform,
+        status: "failed",
+        detail: `invalid draft: ${err instanceof Error ? err.message : err}`,
+      });
+      continue;
+    }
     if (content === null) {
       outcomes.push({ platform, status: "skipped", detail: `no draft in ${dir}` });
       continue;

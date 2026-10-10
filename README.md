@@ -68,7 +68,9 @@ inline, and links already present are never duplicated.
 
 ## Reviewing drafts
 
-Each run writes `output/YYYY-MM-DD/`:
+Each run writes a fresh `output/YYYY-MM-DD/<mode>-<HHMMSS>/` directory —
+every generation gets its own folder, so a re-run never overwrites a draft
+you already reviewed:
 
 | File | What |
 |---|---|
@@ -79,7 +81,9 @@ Each run writes `output/YYYY-MM-DD/`:
 | `items.json` | the collected items the drafts were built from |
 | `meta.json` | mode, counts, over-280 audit |
 
-In CI the same folder is downloadable as a **workflow artifact**.
+`publish` defaults to the newest run directory; pass `--dir` to pick a
+specific one. In CI the `output/` tree is downloadable as a **workflow
+artifact**.
 
 ## Enabling publishing
 

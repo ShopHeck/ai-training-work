@@ -130,6 +130,9 @@ async function cmdPublish(
       o.status === "posted" ? "✓" : o.status === "failed" ? "✗" : "•";
     console.log(`${icon} ${o.platform}: ${o.status} — ${o.detail}`);
   }
+  if (outcomes.some((o) => o.status === "failed")) {
+    process.exitCode = 1;
+  }
 }
 
 async function main(): Promise<void> {

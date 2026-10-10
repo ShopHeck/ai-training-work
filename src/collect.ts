@@ -119,8 +119,11 @@ export async function collect(): Promise<CollectResult> {
   });
 
   const { fresh, state } = filterUnseen(all, seen);
-  saveSeen(SEEN_PATH, pruneSeen(state));
+  // Persist items BEFORE committing seen timestamps — a failed append must
+  // not permanently suppress items (worst case of this order: items are
+  // re-collected next run, which loadItems dedupes by id).
   appendItems(ITEMS_PATH, fresh);
+  saveSeen(SEEN_PATH, pruneSeen(state));
 
   return { fresh, scanned: all.length, failedSources };
 }
@@ -178,8 +181,8 @@ export async function collectAll(): Promise<CollectResult> {
   if (hn.length === 0) return base;
   const seen = loadSeen(SEEN_PATH);
   const { fresh, state } = filterUnseen(hn, seen);
-  saveSeen(SEEN_PATH, pruneSeen(state));
   appendItems(ITEMS_PATH, fresh);
+  saveSeen(SEEN_PATH, pruneSeen(state));
   return {
     fresh: [...base.fresh, ...fresh],
     scanned: base.scanned + hn.length,
